@@ -2,13 +2,6 @@
 <img src="./app/static/banner.png" alt="banner" width="100%"/>
 </p>
 
-## Table of Contents
-- [Installation](#Installation)
-- [System Requirements](#System-Requirements)
-- [First-run Configuration](#First-run-Configuration)
-- [Running the App](#Running-the-App)
-- [Acknowledgements](#Acknowledgements)
-
 # Binder Design GUI
 
 A lightweight web UI for running and chaining several structure-design workflows:
@@ -20,6 +13,15 @@ A lightweight web UI for running and chaining several structure-design workflows
 - **AF3 result filtering**
 
 The interface is designed for local or server-side use and focuses on practical pipeline execution rather than full workflow orchestration frameworks.
+
+---
+
+## Table of Contents
+- [Installation](#Installation)
+- [System Requirements](#System-Requirements)
+- [First-run Configuration](#First-run-Configuration)
+- [Running the App](#Running-the-App)
+- [Acknowledgements](#Acknowledgements)
 
 ---
 
