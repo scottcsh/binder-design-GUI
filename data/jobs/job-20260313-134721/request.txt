@@ -1,0 +1,1 @@
+/home/cs/SH/binder_llm/data/targets/1yjd_monomer.pdb, hotspot C34, C46, C61, C63, C97 to make 50 60-80 aa binder, show only top 20

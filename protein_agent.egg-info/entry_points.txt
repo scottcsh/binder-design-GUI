@@ -1,0 +1,2 @@
+[console_scripts]
+pbind = app.cli:app

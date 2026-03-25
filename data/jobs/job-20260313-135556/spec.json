@@ -1,0 +1,25 @@
+{
+  "workflow": "binder_pipeline",
+  "target_pdb": "/home/cs/SH/binder_llm/data/targets/1yjd_monomer.pdb",
+  "contigs": "[C1-118/0 60-80]",
+  "num_backbones": 100,
+  "hotspot_chain": "C",
+  "hotspot_residues": [],
+  "noise_scale_ca": 1.0,
+  "noise_scale_frame": 1.0,
+  "sequences_per_backbone": 4,
+  "af3_top_k_backbones": 20,
+  "resources": {
+    "executor": "local",
+    "gpus": 1,
+    "cpus": 8,
+    "mem_gb": 32,
+    "gpu_type": null,
+    "time_limit": "24:00:00"
+  },
+  "meta": {
+    "job_name": "binder_job",
+    "output_root": "./data/jobs",
+    "dry_run": true
+  }
+}

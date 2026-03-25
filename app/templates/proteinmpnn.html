@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Binder design GUI</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+html{overflow-y:scroll;}
+body{
+  font-family:Arial,sans-serif;
+  margin:0;
+  background:#fafafa;
+  display:flex;
+  justify-content:center;
+}
+.page{
+  width:100%;
+  max-width:1000px;
+  margin:0 auto;
+  padding:0 10px;
+  box-sizing:border-box;
+}
+.top-banner{
+  width:100%;
+  margin-top:12px;
+}
+.top-banner img{
+  width:100%;
+  height:auto;
+  display:block;
+  border-radius:8px;
+}
+.navbar{
+  display:flex;
+  gap:8px;
+  margin-top:12px;
+}
+.nav-link{
+  display:inline-block;
+  padding:10px 14px;
+  border:1px solid #ddd;
+  border-bottom:none;
+  border-radius:10px 10px 0 0;
+  background:#f2f2f2;
+  color:#111;
+  text-decoration:none;
+  font-weight:600;
+}
+.nav-link.active{
+  background:#fff;
+}
+.panel{
+  border:1px solid #ddd;
+  border-radius:0 10px 10px 10px;
+  padding:16px;
+  background:#fff;
+}
+h1{
+  margin:0 0 16px 0;
+}
+label{
+  display:block;
+  font-weight:600;
+  margin-top:12px;
+  margin-bottom:6px;
+}
+input{
+  width:100%;
+  box-sizing:border-box;
+  padding:8px;
+  border:1px solid #bbb;
+  border-radius:6px;
+  font-size:14px;
+}
+button{
+  padding:10px 14px;
+  border:1px solid #999;
+  border-radius:8px;
+  background:#f5f5f5;
+  cursor:pointer;
+}
+.path-row{
+  display:grid;
+  grid-template-columns:1fr 120px;
+  gap:8px;
+  align-items:center;
+}
+.info-card,.checkbox-group,.result-card{
+  margin-top:14px;
+  border:1px solid #ddd;
+  border-radius:8px;
+  background:#fafafa;
+  padding:12px;
+}
+.msg{
+  margin-top:12px;
+  padding:10px 12px;
+  border-radius:8px;
+  background:#eef8ea;
+  border:1px solid #cfe8c7;
+}
+.err{
+  margin-top:12px;
+  padding:10px 12px;
+  border-radius:8px;
+  background:#fdeaea;
+  border:1px solid #f2c8c8;
+}
+.help{
+  margin-top:6px;
+  color:#555;
+  font-size:13px;
+}
+.checkbox-item{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-top:8px;
+}
+.checkbox-item input{
+  width:auto;
+}
+.option-block{
+  margin-top:8px;
+}
+.option-fields{
+  margin-left:28px;
+  margin-top:6px;
+}
+.button-row{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  margin-top:16px;
+}
+pre{
+  white-space:pre-wrap;
+  word-break:break-word;
+  margin:0;
+}
+#run_result{
+  min-height:120px;
+  max-height:360px;
+  overflow-y:auto;
+}
+</style>
+<script>
+let currentRunId = null;
+let pollTimer = null;
+
+function openBrowser(targetId, selectType){
+  const url = "/browse?target_id=" + encodeURIComponent(targetId) + "&select=" + encodeURIComponent(selectType);
+  window.open(url, "serverFileBrowser", "width=1000,height=700");
+}
+
+function updateOptionBlock(optionValue, blockId, inputIds){
+  const checkbox = document.querySelector(`input[name="options"][value="${optionValue}"]`);
+  const block = document.getElementById(blockId);
+  if(!checkbox || !block){
+    return;
+  }
+  const enabled = checkbox.checked;
+  block.style.display = enabled ? "block" : "none";
+  (inputIds || []).forEach((id) => {
+    const el = document.getElementById(id);
+    if(el){
+      el.disabled = !enabled;
+    }
+  });
+}
+
+function updateOmitAAsInput(){
+  updateOptionBlock("omit_aas", "omit_aas_block", ["omit_aas_list"]);
+}
+
+function updateMakeBiasInputs(){
+  updateOptionBlock("make_bias", "make_bias_block", ["make_bias_aa_list", "make_bias_bias_list"]);
+}
+
+function updateFixedPositionInput(){
+  updateOptionBlock("fixed_position", "fixed_position_block", ["fixed_position_list"]);
+}
+
+function updateAf3TargetPdbInput(){
+  const checkbox = document.querySelector('input[name="options"][value="generate_af3_json_input"]');
+  const block = document.getElementById("af3_target_pdb_block");
+  const targetPdb = document.getElementById("target_pdb");
+  const targetProteinChain = document.getElementById("target_protein_chain");
+  if(!checkbox || !block){
+    return;
+  }
+  const enabled = checkbox.checked;
+  block.style.display = enabled ? "block" : "none";
+  if(targetPdb){
+    targetPdb.disabled = !enabled;
+  }
+  if(targetProteinChain){
+    targetProteinChain.disabled = !enabled;
+  }
+}
+
+async function updatePdbCount(){
+  const inputDir = document.getElementById("input_dir").value.trim();
+  const countEl = document.getElementById("pdb_count");
+  const dirEl = document.getElementById("display_input_dir");
+  const errEl = document.getElementById("live_error");
+  errEl.textContent = "";
+  try{
+    const params = new URLSearchParams({input_dir: inputDir});
+    const res = await fetch("/proteinmpnn/count?" + params.toString(), {cache:"no-store"});
+    const data = await res.json();
+    if(!res.ok || !data.ok){
+      errEl.textContent = (data && data.error) ? data.error : "Failed to count pdb files.";
+      countEl.textContent = "0";
+      dirEl.textContent = inputDir || "(not set)";
+      return;
+    }
+    countEl.textContent = data.pdb_count ?? 0;
+    dirEl.textContent = data.display_input_dir ?? "(not set)";
+  }catch(_err){
+    errEl.textContent = "Failed to count pdb files.";
+  }
+}
+
+function getFormData(){
+  const formData = new FormData();
+  formData.append("input_dir", document.getElementById("input_dir").value.trim());
+  formData.append("output_dir", document.getElementById("output_dir").value.trim());
+  formData.append("chain_to_design", document.querySelector('input[name="chain_to_design"]').value.trim());
+  formData.append("num_seq_per_target", document.querySelector('input[name="num_seq_per_target"]').value.trim());
+  formData.append("sampling_temp", document.querySelector('input[name="sampling_temp"]').value.trim());
+  formData.append("seed", document.querySelector('input[name="seed"]').value.trim());
+  formData.append("batch_size", document.querySelector('input[name="batch_size"]').value.trim());
+  formData.append("omit_aas_list", document.getElementById("omit_aas_list").value.trim());
+  formData.append("make_bias_aa_list", document.getElementById("make_bias_aa_list").value.trim());
+  formData.append("make_bias_bias_list", document.getElementById("make_bias_bias_list").value.trim());
+  formData.append("fixed_position_list", document.getElementById("fixed_position_list").value.trim());
+  formData.append("target_pdb", document.getElementById("target_pdb").value.trim());
+  formData.append("target_protein_chain", document.getElementById("target_protein_chain").value.trim());
+  formData.append("run_script_path", document.getElementById("run_script_path").value.trim());
+  document.querySelectorAll('input[name="options"]:checked').forEach((el) => {
+    formData.append("options", el.value);
+  });
+  return formData;
+}
+
+async function compileProteinMPNN(){
+  const errorEl = document.getElementById("live_error");
+  const statusEl = document.getElementById("compile_status");
+  errorEl.textContent = "";
+  statusEl.textContent = "Compiling...";
+  try{
+    const res = await fetch("/proteinmpnn/compile", {method:"POST", body:getFormData()});
+    const html = await res.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+    const newScript = doc.querySelector("#run_script_path");
+    const newDisplay = doc.querySelector("#script_display");
+    const newErr = doc.querySelector(".err");
+    if(newErr){
+      errorEl.textContent = newErr.textContent.trim();
+      statusEl.textContent = "";
+      return;
+    }
+    document.getElementById("run_script_path").value = newScript ? newScript.value : "";
+    document.getElementById("script_display").textContent = newDisplay ? newDisplay.textContent : "(not compiled yet)";
+    statusEl.textContent = "Compiled.";
+  }catch(_err){
+    errorEl.textContent = "Failed to compile ProteinMPNN.";
+    statusEl.textContent = "";
+  }
+}
+
+function renderRunState(data){
+  const resultEl = document.getElementById("run_result");
+  const errorEl = document.getElementById("live_error");
+  errorEl.textContent = "";
+
+  const lines = [];
+  lines.push(`Run progress: (${data.completed_steps ?? 0} / ${data.total_steps ?? 0})`);
+  lines.push(`PID: ${data.pid ?? ""}`);
+  lines.push(`Status: ${data.status}`);
+  lines.push(`Log file: ${data.run_log_path ?? ""}`);
+  lines.push("");
+  if(data.log_tail){
+    lines.push(data.log_tail);
+  }
+  resultEl.textContent = lines.join("\n");
+
+  if(data.error){
+    errorEl.textContent = data.error;
+  }
+}
+
+async function pollRunStatus(){
+  if(!currentRunId){
+    return;
+  }
+  try{
+    const params = new URLSearchParams({run_id: currentRunId});
+    const res = await fetch("/proteinmpnn/status?" + params.toString(), {cache:"no-store"});
+    const data = await res.json();
+    if(!res.ok || !data.ok){
+      document.getElementById("live_error").textContent = data.error || "Failed to fetch ProteinMPNN status.";
+      if(pollTimer){
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+      return;
+    }
+    renderRunState(data);
+    if(data.status === "finished" || data.status === "failed"){
+      if(pollTimer){
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    }
+  }catch(_err){
+    document.getElementById("live_error").textContent = "Failed to fetch ProteinMPNN status.";
+    if(pollTimer){
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  }
+}
+
+async function runProteinMPNN(){
+  const scriptPath = document.getElementById("run_script_path").value.trim();
+  const errorEl = document.getElementById("live_error");
+  const resultEl = document.getElementById("run_result");
+  errorEl.textContent = "";
+  if(!scriptPath){
+    errorEl.textContent = "Compile first.";
+    return;
+  }
+  resultEl.textContent = "Starting ProteinMPNN...";
+  try{
+    const res = await fetch("/proteinmpnn/run", {method:"POST", body:getFormData()});
+    const data = await res.json();
+    if(!res.ok || !data.ok){
+      errorEl.textContent = data.error || "Failed to run ProteinMPNN.";
+      resultEl.textContent = "";
+      return;
+    }
+    currentRunId = data.run_id;
+    if(pollTimer){
+      clearInterval(pollTimer);
+    }
+    pollTimer = setInterval(pollRunStatus, 1000);
+    await pollRunStatus();
+  }catch(_err){
+    errorEl.textContent = "Failed to run ProteinMPNN.";
+    resultEl.textContent = "";
+  }
+}
+
+window.addEventListener("DOMContentLoaded", function(){
+  updatePdbCount();
+  updateOmitAAsInput();
+  updateMakeBiasInputs();
+  updateFixedPositionInput();
+  updateAf3TargetPdbInput();
+});
+</script>
+</head>
+<body>
+<div class="page">
+  <div class="top-banner"><img src="/static/banner.png" alt="Banner"></div>
+  <div class="navbar">
+    <a class="nav-link" href="/options">Options</a>
+    <a class="nav-link" href="/">RFdiffusion</a>
+    <a class="nav-link" href="/evoef2">EvoEF2</a>
+    <a class="nav-link active" href="/proteinmpnn">ProteinMPNN</a>
+    <a class="nav-link" href="/alphafold3">AlphaFold 3</a>
+    <a class="nav-link" href="/filter_af3_results">Filter AF3 Results</a>
+  </div>
+  <div class="panel">
+    <h1>ProteinMPNN</h1>
+    {% if message %}<div class="msg">{{ message }}</div>{% endif %}
+    {% if error %}<div class="err">{{ error }}</div>{% endif %}
+
+    <div>
+      <label>Folder with PDBs</label>
+      <div class="path-row">
+        <input id="input_dir" name="input_dir" value="{{ proteinmpnn.input_dir }}" oninput="updatePdbCount()">
+        <button type="button" onclick="openBrowser('input_dir','dir')">Browse</button>
+      </div>
+      <div class="help">Counts *.pdb files directly inside the selected directory.</div>
+      <div id="live_error" class="help" style="color:#b00020;"></div>
+
+      <div class="info-card">
+        <strong>PDB Count</strong>
+        <div style="margin-top:8px;"><span id="pdb_count">{{ proteinmpnn.pdb_count }}</span> pdb files in <span id="display_input_dir">{{ proteinmpnn.display_input_dir }}</span></div>
+      </div>
+
+      <label>Output directory</label>
+      <div class="path-row">
+        <input id="output_dir" name="output_dir" value="{{ proteinmpnn.output_dir }}">
+        <button type="button" onclick="openBrowser('output_dir','dir')">Browse</button>
+      </div>
+
+      <label>Chain to design</label>
+      <input name="chain_to_design" value="{{ proteinmpnn.chain_to_design }}">
+
+      <label>Number of sequences per target</label>
+      <input name="num_seq_per_target" value="{{ proteinmpnn.num_seq_per_target or '10' }}">
+
+      <label>Sampling temperature</label>
+      <input name="sampling_temp" value="{{ proteinmpnn.sampling_temp or '0.4' }}">
+
+      <label>Random seed</label>
+      <input name="seed" value="{{ proteinmpnn.seed or '37' }}">
+
+      <label>Batch size</label>
+      <input name="batch_size" value="{{ proteinmpnn.batch_size or '1' }}">
+
+      <div class="checkbox-group">
+        <strong>Options</strong>
+
+        <div class="option-block">
+          <label class="checkbox-item">
+            <input type="checkbox" name="options" value="omit_aas" {% if proteinmpnn.omit_aas %}checked{% endif %} onchange="updateOmitAAsInput()">
+            <span>Omit AAs</span>
+          </label>
+          <div id="omit_aas_block" class="option-fields" style="{% if not proteinmpnn.omit_aas %}display:none;{% endif %}">
+            <input id="omit_aas_list" name="omit_aas_list" value="{{ proteinmpnn.omit_aas_list or '' }}" placeholder="CSH" {% if not proteinmpnn.omit_aas %}disabled{% endif %}>
+            <div class="help">Amino acids to exclude.</div>
+          </div>
+        </div>
+
+        <div class="option-block">
+          <label class="checkbox-item">
+            <input type="checkbox" name="options" value="make_bias" {% if proteinmpnn.make_bias %}checked{% endif %} onchange="updateMakeBiasInputs()">
+            <span>Make bias</span>
+          </label>
+          <div id="make_bias_block" class="option-fields" style="{% if not proteinmpnn.make_bias %}display:none;{% endif %}">
+            <input id="make_bias_aa_list" name="make_bias_aa_list" value="{{ proteinmpnn.make_bias_aa_list or '' }}" placeholder="C S H" {% if not proteinmpnn.make_bias %}disabled{% endif %}>
+            <div class="help">AA list</div>
+            <input id="make_bias_bias_list" name="make_bias_bias_list" value="{{ proteinmpnn.make_bias_bias_list or '' }}" placeholder="2 0 -1" style="margin-top:8px;" {% if not proteinmpnn.make_bias %}disabled{% endif %}>
+            <div class="help">Bias list</div>
+          </div>
+        </div>
+
+        <div class="option-block">
+          <label class="checkbox-item">
+            <input type="checkbox" name="options" value="fixed_position" {% if proteinmpnn.fixed_position %}checked{% endif %} onchange="updateFixedPositionInput()">
+            <span>Fixed position</span>
+          </label>
+          <div id="fixed_position_block" class="option-fields" style="{% if not proteinmpnn.fixed_position %}display:none;{% endif %}">
+            <input id="fixed_position_list" name="fixed_position_list" value="{{ proteinmpnn.fixed_position_list or '' }}" placeholder="1 2 3 4 12 15" {% if not proteinmpnn.fixed_position %}disabled{% endif %}>
+            <div class="help">The first amino acid in the chain corresponds to 1 and not PDB residues index.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="checkbox-group">
+        <strong>Post-processing</strong>
+        <div class="option-block">
+          <label class="checkbox-item">
+            <input type="checkbox" name="options" value="generate_af3_json_input" {% if proteinmpnn.generate_af3_json_input %}checked{% endif %} onchange="updateAf3TargetPdbInput()">
+            <span>Generate AlphaFold3 json input</span>
+          </label>
+          <div id="af3_target_pdb_block" class="option-fields" style="{% if not proteinmpnn.generate_af3_json_input %}display:none;{% endif %}">
+            <label>Target PDB</label>
+            <div class="path-row">
+              <input id="target_pdb" name="target_pdb" value="{{ proteinmpnn.target_pdb or '' }}" {% if not proteinmpnn.generate_af3_json_input %}disabled{% endif %}>
+              <button type="button" onclick="openBrowser('target_pdb','file_any')">Browse</button>
+            </div>
+
+            <label>Target protein chain</label>
+            <div class="chain-convert-row">
+              <input id="target_protein_chain" name="target_protein_chain" value="{{ proteinmpnn.target_protein_chain or '' }}" style="width:80px !important; min-width:80px !important; max-width:80px !important; flex:0 0 80px !important;">
+              <button type="button" class="nowrap-button" onclick="convertTargetPdbToFasta()">Convert pdb to fasta</button>
+            </div>
+            <div id="af3_convert_status" class="help"></div>
+          </div>
+        </div>
+      </div>
+
+      <input type="hidden" id="run_script_path" name="run_script_path" value="{{ proteinmpnn.run_script_path }}">
+
+      <div class="button-row">
+        <button type="button" onclick="compileProteinMPNN()">Compile</button>
+        <button type="button" onclick="runProteinMPNN()">Run ProteinMPNN</button>
+        <span id="compile_status" class="help"></span>
+      </div>
+    </div>
+
+    <div class="result-card">
+      <strong>Run script</strong>
+      <div id="script_display" class="help">{{ proteinmpnn.run_script_path or "(not compiled yet)" }}</div>
+    </div>
+
+    <div class="result-card">
+      <strong>Run Progress</strong>
+      <div style="margin-top:8px;"><pre id="run_result"></pre></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

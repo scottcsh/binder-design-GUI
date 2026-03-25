@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Binder design GUI</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+html{overflow-y:scroll;}
+body{font-family:Arial,sans-serif;margin:0;background:#fafafa;display:flex;justify-content:center;}
+.page{width:100%;max-width:1000px;margin:0 auto;padding:0 10px;box-sizing:border-box;}
+.top-banner{width:100%;margin-top:12px;}
+.top-banner img{width:100%;height:auto;display:block;border-radius:8px;}
+.navbar{display:flex;gap:8px;margin-top:12px;}
+.nav-link{display:inline-block;padding:10px 14px;border:1px solid #ddd;border-bottom:none;border-radius:10px 10px 0 0;background:#f2f2f2;color:#111;text-decoration:none;font-weight:600;}
+.nav-link.active{background:#fff;}
+.panel{border:1px solid #ddd;border-radius:0 10px 10px 10px;padding:16px;background:#fff;}
+h1{margin:0 0 16px 0;}
+label{display:block;font-weight:600;margin-top:12px;margin-bottom:6px;}
+input,textarea{width:100%;box-sizing:border-box;padding:8px;border:1px solid #bbb;border-radius:6px;font-size:14px;}
+textarea{min-height:120px;resize:vertical;font-family:monospace;}
+button{padding:10px 14px;border:1px solid #999;border-radius:8px;background:#f5f5f5;cursor:pointer;}
+.path-row{display:grid;grid-template-columns:1fr 120px;gap:8px;align-items:center;}
+.section{border:1px solid #ddd;border-radius:10px;background:#fafafa;padding:14px;margin-top:16px;}
+.section h2{margin:0 0 10px 0;font-size:18px;}
+.card{border:1px solid #ddd;border-radius:8px;background:#fafafa;padding:12px;margin-top:12px;}
+.msg{margin-top:12px;padding:10px 12px;border-radius:8px;background:#eef8ea;border:1px solid #cfe8c7;}
+.err{margin-top:12px;padding:10px 12px;border-radius:8px;background:#fdeaea;border:1px solid #f2c8c8;}
+.help{margin-top:6px;color:#555;font-size:13px;white-space:pre-wrap;}
+</style>
+<script>
+function openBrowser(targetId, selectType){
+  const url = "/browse?target_id=" + encodeURIComponent(targetId) + "&select=" + encodeURIComponent(selectType);
+  window.open(url, "serverFileBrowser", "width=1000,height=700");
+}
+</script>
+</head>
+<body>
+<div class="page">
+  <div class="top-banner"><img src="/static/banner.png" alt="Banner"></div>
+  <div class="navbar">
+    <a class="nav-link active" href="/options">Options</a>
+    <a class="nav-link" href="/">RFdiffusion</a>
+    <a class="nav-link" href="/evoef2">EvoEF2</a>
+    <a class="nav-link" href="/proteinmpnn">ProteinMPNN</a>
+    <a class="nav-link" href="/alphafold3">AlphaFold 3</a>
+    <a class="nav-link" href="/filter_af3_results">Filter AF3 Results</a>
+  </div>
+  <div class="panel">
+    <h1>Options</h1>
+    {% if message %}<div class="msg">{{ message }}</div>{% endif %}
+    {% if error %}<div class="err">{{ error }}</div>{% endif %}
+
+    <form action="/options/save" method="post">
+      <div class="section">
+        <h2>RFdiffusion</h2>
+        <label>RFdiffusion Executable</label>
+        <div class="path-row">
+          <input id="rfd_executable" name="rfd_executable" value="{{ config.rfd_executable }}">
+          <button type="button" onclick="openBrowser('rfd_executable','file_any')">Browse</button>
+        </div>
+        <label>RFdiffusion Environment</label>
+        <textarea name="env_setup">{{ config.env_setup }}</textarea>
+      </div>
+
+      <div class="section">
+        <h2>EvoEF2</h2>
+        <label>EvoEF2 Executable</label>
+        <div class="path-row">
+          <input id="evoef2_executable" name="evoef2_executable" value="{{ config.evoef2_executable }}">
+          <button type="button" onclick="openBrowser('evoef2_executable','file_any')">Browse</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>ProteinMPNN</h2>
+        <label>ProteinMPNN Directory</label>
+        <div class="path-row">
+          <input id="proteinmpnn_dir" name="proteinmpnn_dir" value="{{ config.proteinmpnn_dir }}">
+          <button type="button" onclick="openBrowser('proteinmpnn_dir','dir')">Browse</button>
+        </div>
+        <label>ProteinMPNN Environment</label>
+        <textarea name="proteinmpnn_env_setup">{{ config.proteinmpnn_env_setup }}</textarea>
+      </div>
+
+      <div class="section">
+        <h2>AlphaFold 3</h2>
+        <label>Root Directory</label>
+        <div class="path-row">
+          <input id="alphafold3_root_dir" name="alphafold3_root_dir" value="{{ config.alphafold3_root_dir }}">
+          <button type="button" onclick="openBrowser('alphafold3_root_dir','dir')">Browse</button>
+        </div>
+
+        <label>Database Directory</label>
+        <div class="path-row">
+          <input id="alphafold3_database_dir" name="alphafold3_database_dir" value="{{ config.alphafold3_database_dir }}">
+          <button type="button" onclick="openBrowser('alphafold3_database_dir','dir')">Browse</button>
+        </div>
+
+        <label>Model Directory</label>
+        <div class="path-row">
+          <input id="alphafold3_model_dir" name="alphafold3_model_dir" value="{{ config.alphafold3_model_dir }}">
+          <button type="button" onclick="openBrowser('alphafold3_model_dir','dir')">Browse</button>
+        </div>
+
+        <label>Docker Profile</label>
+        <input name="alphafold3_docker_profile" value="{{ config.alphafold3_docker_profile }}">
+
+        <label>Environment</label>
+        <textarea name="alphafold3_environment">{{ config.alphafold3_environment }}</textarea>
+      </div>
+
+      <br>
+      <button type="submit">Save</button>
+    </form>
+
+    <div class="section">
+      <h2>Current Options</h2>
+      <div class="card"><strong>Current RFdiffusion executable:</strong><div class="help">{{ config.rfd_executable }}</div></div>
+      <div class="card"><strong>Current RFdiffusion environment:</strong><div class="help">{{ config.env_setup }}</div></div>
+      <div class="card"><strong>Current EvoEF2 executable:</strong><div class="help">{{ config.evoef2_executable or "(not set)" }}</div></div>
+      <div class="card"><strong>Current ProteinMPNN directory:</strong><div class="help">{{ config.proteinmpnn_dir or "(not set)" }}</div></div>
+      <div class="card"><strong>Current ProteinMPNN environment:</strong><div class="help">{{ config.proteinmpnn_env_setup or "(not set)" }}</div></div>
+      <div class="card"><strong>Current root directory:</strong><div class="help">{{ config.alphafold3_root_dir or "(not set)" }}</div></div>
+      <div class="card"><strong>Current database directory:</strong><div class="help">{{ config.alphafold3_database_dir or "(not set)" }}</div></div>
+      <div class="card"><strong>Current model directory:</strong><div class="help">{{ config.alphafold3_model_dir or "(not set)" }}</div></div>
+      <div class="card"><strong>Current docker profile:</strong><div class="help">{{ config.alphafold3_docker_profile or "(not set)" }}</div></div>
+      <div class="card"><strong>Current environment:</strong><div class="help">{{ config.alphafold3_environment or "(not set)" }}</div></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

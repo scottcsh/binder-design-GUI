@@ -1,0 +1,1 @@
+/home/cs/SH/binder_llm/data/targets/1yjd_monomer.pdb 기준으로 hotspot C:34,C:46,C:61,C:63,C:97 주변에 100개 만들자

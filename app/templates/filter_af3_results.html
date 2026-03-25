@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Binder design GUI</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+html{overflow-y:scroll;}
+body{font-family:Arial,sans-serif;margin:0;background:#fafafa;display:flex;justify-content:center;}
+.page{width:100%;max-width:1000px;margin:0 auto;padding:0 10px;box-sizing:border-box;}
+.top-banner{width:100%;margin-top:12px;}
+.top-banner img{width:100%;height:auto;display:block;border-radius:8px;}
+.navbar{display:flex;gap:8px;margin-top:12px;}
+.nav-link{display:inline-block;padding:10px 14px;border:1px solid #ddd;border-bottom:none;border-radius:10px 10px 0 0;background:#f2f2f2;color:#111;text-decoration:none;font-weight:600;}
+.nav-link.active{background:#fff;}
+.panel{border:1px solid #ddd;border-radius:0 10px 10px 10px;padding:16px;background:#fff;}
+h1{margin:0 0 16px 0;}
+label{display:block;font-weight:600;margin-top:12px;margin-bottom:6px;}
+input,select{width:100%;box-sizing:border-box;padding:8px;border:1px solid #bbb;border-radius:6px;font-size:14px;}
+button{padding:10px 14px;border:1px solid #999;border-radius:8px;background:#f5f5f5;cursor:pointer;}
+.path-row{display:grid;grid-template-columns:1fr 120px;gap:8px;align-items:center;}
+.help{margin-top:6px;color:#555;font-size:13px;white-space:pre-wrap;}
+.msg{margin-top:12px;padding:10px 12px;border-radius:8px;background:#eef8ea;border:1px solid #cfe8c7;}
+.err{margin-top:12px;padding:10px 12px;border-radius:8px;background:#fdeaea;border:1px solid #f2c8c8;}
+</style>
+<script>
+function openBrowser(targetId, selectType){
+  const url = "/browse?target_id=" + encodeURIComponent(targetId) + "&select=" + encodeURIComponent(selectType);
+  window.open(url, "serverFileBrowser", "width=1000,height=700");
+}
+</script>
+</head>
+<body>
+<div class="page">
+  <div class="top-banner"><img src="/static/banner.png" alt="Banner"></div>
+  <div class="navbar">
+    <a class="nav-link" href="/options">Options</a>
+    <a class="nav-link" href="/">RFdiffusion</a>
+    <a class="nav-link" href="/evoef2">EvoEF2</a>
+    <a class="nav-link" href="/proteinmpnn">ProteinMPNN</a>
+    <a class="nav-link" href="/alphafold3">AlphaFold 3</a>
+    <a class="nav-link active" href="/filter_af3_results">Filter AF3 Results</a>
+  </div>
+  <div class="panel">
+    <h1>Filter AF3 Results</h1>
+    {% if message %}<div class="msg">{{ message }}</div>{% endif %}
+    {% if error %}<div class="err">{{ error }}</div>{% endif %}
+
+    <form action="/filter_af3_results" method="post">
+      <label>AlphaFold 3 output directory</label>
+      <div class="path-row">
+        <input id="dir" name="dir" value="{{ filter_af3_results.dir }}">
+        <button type="button" onclick="openBrowser('dir','dir')">Browse</button>
+      </div>
+      <div class="help">Root directory containing JSON files (required)</div>
+
+      <label>Filtered result directory</label>
+      <div class="path-row">
+        <input id="filtered_dir" name="filtered_dir" value="{{ filter_af3_results.filtered_dir }}">
+        <button type="button" onclick="openBrowser('filtered_dir','dir')">Browse</button>
+      </div>
+      <div class="help">Directory to save filtered results</div>
+
+      <label>iptm</label>
+      <input name="iptm" value="{{ filter_af3_results.iptm }}">
+      <div class="help">Minimum iptm threshold (optional)</div>
+
+      <label>ptm</label>
+      <input name="ptm" value="{{ filter_af3_results.ptm }}">
+      <div class="help">Minimum ptm threshold (optional)</div>
+
+      <label>Minimum ranking score</label>
+      <input name="score" value="{{ filter_af3_results.score }}">
+      <div class="help">Minimum ranking_score value (optional)</div>
+
+      <label>PAE</label>
+      <input name="pae" value="{{ filter_af3_results.pae }}">
+      <div class="help">Maximum allowed chain_pair_pae_min value (optional)</div>
+
+      <label>Chain ID</label>
+      <select name="chain_id">
+        <option value="" {% if filter_af3_results.chain_id == "" %}selected{% endif %}></option>
+        <option value="A" {% if filter_af3_results.chain_id == "A" %}selected{% endif %}>A</option>
+        <option value="B" {% if filter_af3_results.chain_id == "B" %}selected{% endif %}>B</option>
+        <option value="C" {% if filter_af3_results.chain_id == "C" %}selected{% endif %}>C</option>
+        <option value="D" {% if filter_af3_results.chain_id == "D" %}selected{% endif %}>D</option>
+        <option value="E" {% if filter_af3_results.chain_id == "E" %}selected{% endif %}>E</option>
+      </select>
+      <div class="help">Chain ID (A–E) to select chain_pair_pae_min value (required for --pae option)</div>
+
+      <label>Maximum number of outputs</label>
+      <input name="max_output" value="{{ filter_af3_results.max_output }}">
+      <div class="help">Limit output to top N entries sorted by average(iptm, ptm, score)</div>
+
+      <br><br>
+      <button type="submit">Run</button>
+    </form>
+  </div>
+</div>
+</body>
+</html>

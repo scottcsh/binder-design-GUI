@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Binder design GUI</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+html{overflow-y:scroll;}
+body{
+  font-family:Arial,sans-serif;
+  margin:0;
+  background:#fafafa;
+  display:flex;
+  justify-content:center;
+}
+.page{
+  width:100%;
+  max-width:1000px;
+  margin:0 auto;
+  padding:0 10px;
+  box-sizing:border-box;
+}
+.top-banner{
+  width:100%;
+  margin-top:12px;
+}
+.top-banner img{
+  width:100%;
+  height:auto;
+  display:block;
+  border-radius:8px;
+}
+.navbar{
+  display:flex;
+  gap:8px;
+  margin-top:12px;
+}
+.nav-link{
+  display:inline-block;
+  padding:10px 14px;
+  border:1px solid #ddd;
+  border-bottom:none;
+  border-radius:10px 10px 0 0;
+  background:#f2f2f2;
+  color:#111;
+  text-decoration:none;
+  font-weight:600;
+}
+.nav-link.active{
+  background:#fff;
+}
+.panel{
+  border:1px solid #ddd;
+  border-radius:0 10px 10px 10px;
+  padding:16px;
+  background:#fff;
+}
+h1{
+  margin:0 0 16px 0;
+}
+label{
+  display:block;
+  font-weight:600;
+  margin-top:12px;
+  margin-bottom:6px;
+}
+input{
+  width:100%;
+  box-sizing:border-box;
+  padding:8px;
+  border:1px solid #bbb;
+  border-radius:6px;
+  font-size:14px;
+}
+button{
+  padding:10px 14px;
+  border:1px solid #999;
+  border-radius:8px;
+  background:#f5f5f5;
+  cursor:pointer;
+}
+.path-row{
+  display:grid;
+  grid-template-columns:1fr 120px;
+  gap:8px;
+  align-items:center;
+}
+.button-row{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  margin-top:16px;
+}
+.info-card{
+  margin-top:14px;
+  border:1px solid #ddd;
+  border-radius:8px;
+  background:#fafafa;
+  padding:12px;
+}
+.msg{
+  margin-top:12px;
+  padding:10px 12px;
+  border-radius:8px;
+  background:#eef8ea;
+  border:1px solid #cfe8c7;
+}
+.err{
+  margin-top:12px;
+  padding:10px 12px;
+  border-radius:8px;
+  background:#fdeaea;
+  border:1px solid #f2c8c8;
+}
+.help{
+  margin-top:6px;
+  color:#555;
+  font-size:13px;
+}
+.result-card{
+  margin-top:14px;
+  border:1px solid #ddd;
+  border-radius:8px;
+  background:#fafafa;
+  padding:12px;
+}
+pre{
+  white-space:pre-wrap;
+  word-break:break-word;
+  margin:0;
+}
+#run_result{
+  min-height:120px;
+  max-height:360px;
+  overflow-y:auto;
+}
+</style>
+<script>
+let currentRunId = null;
+let pollTimer = null;
+
+function openBrowser(targetId, selectType){
+  const url = "/browse?target_id=" + encodeURIComponent(targetId) + "&select=" + encodeURIComponent(selectType);
+  window.open(url, "serverFileBrowser", "width=1000,height=700");
+}
+
+async function updatePdbCount(){
+  const input = document.getElementById("input_dir");
+  const countEl = document.getElementById("pdb_count");
+  const dirEl = document.getElementById("display_input_dir");
+  const errEl = document.getElementById("live_error");
+  const inputDir = input.value.trim();
+  errEl.textContent = "";
+  try{
+    const params = new URLSearchParams({input_dir: inputDir});
+    const res = await fetch("/evoef2/count?" + params.toString(), {cache: "no-store"});
+    if(!res.ok){
+      errEl.textContent = "Failed to count pdb files.";
+      return;
+    }
+    const data = await res.json();
+    countEl.textContent = data.pdb_count ?? 0;
+    dirEl.textContent = data.display_input_dir ?? "(not set)";
+    if(!data.ok && data.error){
+      errEl.textContent = data.error;
+    }
+  }catch(_err){
+    errEl.textContent = "Failed to count pdb files.";
+  }
+}
+
+function renderRunState(data){
+  const resultEl = document.getElementById("run_result");
+  const errorEl = document.getElementById("live_error");
+  const lines = [];
+  errorEl.textContent = "";
+  lines.push(`Run progress: (${data.processed_count ?? 0} / ${data.total_count ?? 0})`);
+  lines.push(`Processed: ${data.processed_count ?? 0}`);
+  lines.push(`Scored: ${data.scored_count ?? 0}`);
+  lines.push(`Kept: ${data.kept_count ?? 0}`);
+  lines.push("");
+  if(data.log_tail){
+    lines.push(data.log_tail);
+  }
+  if(data.status === "completed" && Array.isArray(data.results) && data.results.length > 0){
+    lines.push("");
+    lines.push("Top results:");
+    for(const item of data.results){
+      lines.push(`${item.beststruct_pdb} | score=${item.score}`);
+    }
+  }
+  resultEl.textContent = lines.join("\n");
+  if(data.status === "failed"){
+    errorEl.textContent = data.error || "Failed to run EvoEF2.";
+  }
+}
+
+async function pollRunStatus(){
+  if(!currentRunId){
+    return;
+  }
+  try{
+    const params = new URLSearchParams({run_id: currentRunId});
+    const res = await fetch("/evoef2/status?" + params.toString(), {cache:"no-store"});
+    const data = await res.json();
+    if(!res.ok || !data.ok){
+      document.getElementById("live_error").textContent = data.error || "Failed to fetch EvoEF2 status.";
+      if(pollTimer){
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+      return;
+    }
+    renderRunState(data);
+    if(data.status === "completed" || data.status === "failed"){
+      if(pollTimer){
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    }
+  }catch(_err){
+    document.getElementById("live_error").textContent = "Failed to fetch EvoEF2 status.";
+    if(pollTimer){
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  }
+}
+
+async function runEvoEF2(){
+  const inputDir = document.getElementById("input_dir").value.trim();
+  const chainToDesign = document.querySelector('input[name="chain_to_design"]').value.trim();
+  const maxPdbsToKeep = document.querySelector('input[name="max_pdbs_to_keep"]').value.trim();
+  const resultEl = document.getElementById("run_result");
+  const errorEl = document.getElementById("live_error");
+  errorEl.textContent = "";
+  resultEl.textContent = "Starting EvoEF2 run...";
+  const formData = new FormData();
+  formData.append("input_dir", inputDir);
+  formData.append("chain_to_design", chainToDesign);
+  formData.append("max_pdbs_to_keep", maxPdbsToKeep);
+  try{
+    const res = await fetch("/evoef2/run", {method:"POST", body:formData});
+    const data = await res.json();
+    if(!res.ok || !data.ok){
+      resultEl.textContent = "";
+      errorEl.textContent = data.error || "Failed to run EvoEF2.";
+      return;
+    }
+    currentRunId = data.run_id;
+    if(pollTimer){
+      clearInterval(pollTimer);
+    }
+    pollTimer = setInterval(pollRunStatus, 1000);
+    await pollRunStatus();
+  }catch(_err){
+    resultEl.textContent = "";
+    errorEl.textContent = "Failed to run EvoEF2.";
+  }
+}
+
+window.addEventListener("DOMContentLoaded", updatePdbCount);
+</script>
+</head>
+<body>
+<div class="page">
+  <div class="top-banner">
+    <img src="/static/banner.png" alt="Banner">
+  </div>
+
+  <div class="navbar">
+    <a class="nav-link" href="/options">Options</a>
+    <a class="nav-link" href="/">RFdiffusion</a>
+    <a class="nav-link active" href="/evoef2">EvoEF2</a>
+    <a class="nav-link" href="/proteinmpnn">ProteinMPNN</a>
+    <a class="nav-link" href="/alphafold3">AlphaFold 3</a>
+    <a class="nav-link" href="/filter_af3_results">Filter AF3 Results</a>
+  </div>
+
+  <div class="panel">
+    <h1>EvoEF2</h1>
+
+    {% if message %}<div class="msg">{{ message }}</div>{% endif %}
+    {% if error %}<div class="err">{{ error }}</div>{% endif %}
+
+    <form action="/evoef2" method="post">
+      <label>Input Directory</label>
+      <div class="path-row">
+        <input id="input_dir" name="input_dir" value="{{ evoef2.input_dir }}" oninput="updatePdbCount()">
+        <button type="button" onclick="openBrowser('input_dir','dir')">Browse</button>
+      </div>
+
+      <div class="help">Counts *.pdb files directly inside the selected directory.</div>
+      <div id="live_error" class="help" style="color:#b00020;"></div>
+
+      <div class="info-card">
+        <strong>PDB Count</strong>
+        <div style="margin-top:8px;"><span id="pdb_count">{{ evoef2.pdb_count }}</span> pdb files in <span id="display_input_dir">{{ evoef2.display_input_dir }}</span></div>
+      </div>
+
+      <label>Chain to design</label>
+      <input name="chain_to_design" value="{{ evoef2.chain_to_design }}">
+
+      <label>Max PDBs to keep (by score)</label>
+      <input name="max_pdbs_to_keep" value="{{ evoef2.max_pdbs_to_keep }}">
+
+      <div class="button-row">
+        <button type="button" onclick="runEvoEF2()">Run EvoEF2</button>
+      </div>
+    </form>
+
+    <div class="result-card">
+      <strong>Run Progress</strong>
+      <div style="margin-top:8px;">
+        <pre id="run_result"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

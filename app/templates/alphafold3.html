@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Binder design GUI</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+html{overflow-y:scroll;}
+body{font-family:Arial,sans-serif;margin:0;background:#fafafa;display:flex;justify-content:center;}
+.page{width:100%;max-width:1000px;margin:0 auto;padding:0 10px;box-sizing:border-box;}
+.top-banner{width:100%;margin-top:12px;}
+.top-banner img{width:100%;height:auto;display:block;border-radius:8px;}
+.navbar{display:flex;gap:8px;margin-top:12px;}
+.nav-link{display:inline-block;padding:10px 14px;border:1px solid #ddd;border-bottom:none;border-radius:10px 10px 0 0;background:#f2f2f2;color:#111;text-decoration:none;font-weight:600;}
+.nav-link.active{background:#fff;}
+.panel{border:1px solid #ddd;border-radius:0 10px 10px 10px;padding:16px;background:#fff;}
+h1{margin:0 0 16px 0;}
+label{display:block;font-weight:600;margin-top:12px;margin-bottom:6px;}
+input,select{width:100%;box-sizing:border-box;padding:8px;border:1px solid #bbb;border-radius:6px;font-size:14px;}
+button{padding:10px 14px;border:1px solid #999;border-radius:8px;background:#f5f5f5;cursor:pointer;}
+.path-row{display:grid;grid-template-columns:1fr 120px;gap:8px;align-items:center;}
+.card{border:1px solid #ddd;border-radius:8px;background:#fafafa;padding:12px;margin-top:12px;}
+.help{margin-top:6px;color:#555;font-size:13px;white-space:pre-wrap;}
+.msg{margin-top:12px;padding:10px 12px;border-radius:8px;background:#eef8ea;border:1px solid #cfe8c7;}
+.err{margin-top:12px;padding:10px 12px;border-radius:8px;background:#fdeaea;border:1px solid #f2c8c8;}
+.info-card{margin-top:14px;border:1px solid #ddd;border-radius:8px;background:#fafafa;padding:12px;}
+.button-row{display:flex;gap:8px;align-items:center;margin-top:16px;}
+pre{white-space:pre-wrap;word-break:break-word;margin:0;}
+#run_result{min-height:120px;max-height:360px;overflow-y:auto;}
+pre{white-space:pre-wrap;word-break:break-word;margin:0;}
+#run_result{min-height:120px;max-height:360px;overflow-y:auto;}
+</style>
+<script>
+function openBrowser(targetId, selectType){
+  const url = "/browse?target_id=" + encodeURIComponent(targetId) + "&select=" + encodeURIComponent(selectType);
+  window.open(url, "serverFileBrowser", "width=1000,height=700");
+}
+async function updateJsonCount(){
+  const input = document.getElementById("input_json_dir");
+  const countEl = document.getElementById("json_count");
+  const dirEl = document.getElementById("display_input_json_dir");
+  const errEl = document.getElementById("json_count_error");
+  if(!input || !countEl || !dirEl || !errEl){
+    return;
+  }
+  errEl.textContent = "";
+  try{
+    const params = new URLSearchParams({input_json_dir: input.value.trim()});
+    const res = await fetch("/alphafold3/count_json?" + params.toString(), {cache:"no-store"});
+    const data = await res.json();
+    countEl.textContent = data.json_count ?? 0;
+    dirEl.textContent = data.display_input_json_dir ?? "(not set)";
+    if(!res.ok || !data.ok){
+      errEl.textContent = data.error || "Failed to count json files.";
+    }
+  }catch(_err){
+    errEl.textContent = "Failed to count json files.";
+  }
+}
+
+window.addEventListener("DOMContentLoaded", function(){
+  updateJsonCount();
+});
+
+let currentAf3RunId = null;
+let af3PollTimer = null;
+
+function getAlphaFold3FormData(){
+  const formData = new FormData();
+  formData.append("input_json_dir", document.getElementById("input_json_dir").value.trim());
+  formData.append("output_dir", document.getElementById("output_dir").value.trim());
+  formData.append("gpu", document.querySelector('select[name="gpu"]').value);
+  formData.append("run_script_path", document.getElementById("run_script_path").value.trim());
+  return formData;
+}
+
+function renderAlphaFold3RunState(data){
+  const resultEl = document.getElementById("run_result");
+  const errorEl = document.getElementById("run_error");
+  if(errorEl){ errorEl.textContent = ""; }
+
+  const lines = [];
+  lines.push(`PID: ${data.pid ?? ""}`);
+  lines.push(`Status: ${data.status}`);
+  lines.push(`Progress: ${data.completed_steps ?? 0} / ${data.total_steps ?? 0}`);
+  lines.push(`Log file: ${data.run_log_path ?? ""}`);
+  lines.push("");
+  if(data.log_tail){
+    lines.push(data.log_tail);
+  }
+  if(resultEl){
+    resultEl.textContent = lines.join("\n");
+  }
+  if(data.error && errorEl){
+    errorEl.textContent = data.error;
+  }
+}
+
+async function pollAlphaFold3Status(){
+  if(!currentAf3RunId){
+    return;
+  }
+  try{
+    const params = new URLSearchParams({run_id: currentAf3RunId});
+    const res = await fetch("/alphafold3/status?" + params.toString(), {cache:"no-store"});
+    const data = await res.json();
+    if(!res.ok || !data.ok){
+      const errorEl = document.getElementById("run_error");
+      if(errorEl){ errorEl.textContent = data.error || "Failed to fetch AlphaFold 3 status."; }
+      if(af3PollTimer){
+        clearInterval(af3PollTimer);
+        af3PollTimer = null;
+      }
+      return;
+    }
+    renderAlphaFold3RunState(data);
+    if(data.status === "finished" || data.status === "failed"){
+      if(af3PollTimer){
+        clearInterval(af3PollTimer);
+        af3PollTimer = null;
+      }
+    }
+  }catch(_err){
+    const errorEl = document.getElementById("run_error");
+    if(errorEl){ errorEl.textContent = "Failed to fetch AlphaFold 3 status."; }
+    if(af3PollTimer){
+      clearInterval(af3PollTimer);
+      af3PollTimer = null;
+    }
+  }
+}
+
+async function stopAlphaFold3(){
+  const errorEl = document.getElementById("run_error");
+  const resultEl = document.getElementById("run_result");
+  if(errorEl){ errorEl.textContent = ""; }
+
+  if(!currentAf3RunId){
+    if(errorEl){ errorEl.textContent = "No running AlphaFold 3 job."; }
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("run_id", currentAf3RunId);
+
+  try{
+    const res = await fetch("/alphafold3/stop", {method:"POST", body:formData});
+    const data = await res.json();
+    if(!res.ok || !data.ok){
+      if(errorEl){ errorEl.textContent = data.error || "Failed to stop AlphaFold 3."; }
+      return;
+    }
+    if(af3PollTimer){
+      clearInterval(af3PollTimer);
+      af3PollTimer = null;
+    }
+    if(errorEl){ errorEl.textContent = "Process stopped."; }
+    if(resultEl){
+      const current = resultEl.textContent || "";
+      resultEl.textContent = current;
+    }
+  }catch(_err){
+    if(errorEl){ errorEl.textContent = "Failed to stop AlphaFold 3."; }
+  }
+}
+
+async function runAlphaFold3(){
+  const scriptPath = document.getElementById("run_script_path").value.trim();
+  const errorEl = document.getElementById("run_error");
+  const resultEl = document.getElementById("run_result");
+  if(errorEl){ errorEl.textContent = ""; }
+  if(!scriptPath){
+    if(errorEl){ errorEl.textContent = "Compile first."; }
+    return;
+  }
+  if(resultEl){
+    resultEl.textContent = "Starting AlphaFold 3...";
+  }
+  try{
+    const res = await fetch("/alphafold3/run", {method:"POST", body:getAlphaFold3FormData()});
+    const data = await res.json();
+    if(!res.ok || !data.ok){
+      if(errorEl){ errorEl.textContent = data.error || "Failed to run AlphaFold 3."; }
+      if(resultEl){ resultEl.textContent = ""; }
+      return;
+    }
+    currentAf3RunId = data.run_id;
+    if(af3PollTimer){
+      clearInterval(af3PollTimer);
+    }
+    af3PollTimer = setInterval(pollAlphaFold3Status, 1000);
+    await pollAlphaFold3Status();
+  }catch(_err){
+    if(errorEl){ errorEl.textContent = "Failed to run AlphaFold 3."; }
+    if(resultEl){ resultEl.textContent = ""; }
+  }
+}
+</script>
+</head>
+<body>
+<div class="page">
+  <div class="top-banner"><img src="/static/banner.png" alt="Banner"></div>
+  <div class="navbar">
+    <a class="nav-link" href="/options">Options</a>
+    <a class="nav-link" href="/">RFdiffusion</a>
+    <a class="nav-link" href="/evoef2">EvoEF2</a>
+    <a class="nav-link" href="/proteinmpnn">ProteinMPNN</a>
+    <a class="nav-link active" href="/alphafold3">AlphaFold 3</a>
+    <a class="nav-link" href="/filter_af3_results">Filter AF3 Results</a>
+  </div>
+  <div class="panel">
+    <h1>AlphaFold 3</h1>
+    {% if message %}<div class="msg">{{ message }}</div>{% endif %}
+    {% if error %}<div class="err">{{ error }}</div>{% endif %}
+
+    <form action="/alphafold3" method="post">
+      <label>Input json file directory</label>
+      <div class="path-row">
+        <input id="input_json_dir" name="input_json_dir" value="{{ alphafold3.input_json_dir }}" oninput="updateJsonCount()">
+        <button type="button" onclick="openBrowser('input_json_dir','dir')">Browse</button>
+      </div>
+
+      <div id="json_count_error" class="help" style="color:#b00020;"></div>
+      <div class="info-card">
+        <strong>JSON Count</strong>
+        <div style="margin-top:8px;"><span id="json_count">0</span> json files in <span id="display_input_json_dir">(not set)</span></div>
+      </div>
+
+      <label>Output directory</label>
+      <div class="path-row">
+        <input id="output_dir" name="output_dir" value="{{ alphafold3.output_dir }}">
+        <button type="button" onclick="openBrowser('output_dir','dir')">Browse</button>
+      </div>
+
+      <label>GPU</label>
+      <select name="gpu">
+        <option value="0" {% if alphafold3.gpu == "0" %}selected{% endif %}>0</option>
+        <option value="1" {% if alphafold3.gpu == "1" %}selected{% endif %}>1</option>
+      </select>
+
+      <div class="button-row">
+        <button type="submit">Compile</button>
+        <button type="button" onclick="runAlphaFold3()">Run AlphaFold 3</button>
+        <button type="button" onclick="stopAlphaFold3()">Stop running</button>
+      </div>
+    </form>
+
+    <input type="hidden" id="run_script_path" name="run_script_path" value="{{ alphafold3.run_script_path }}">
+
+    <div class="info-card">
+      <strong>Run script</strong>
+      <div class="help" id="script_display">{{ alphafold3.run_script_path or "(not compiled yet)" }}</div>
+    </div>
+
+    <div id="run_error" class="help" style="color:#b00020;"></div>
+
+    <div class="info-card">
+      <strong>Run Progress</strong>
+      <div style="margin-top:8px;"><pre id="run_result"></pre></div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

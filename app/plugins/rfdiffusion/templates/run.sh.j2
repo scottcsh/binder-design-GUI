@@ -1,0 +1,18 @@
+#!/bin/bash
+set -euo pipefail
+
+{% if conda_env %}
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate {{ conda_env }}
+{% endif %}
+
+mkdir -p logs
+
+{{ script_path }} \
+inference.output_prefix={{ output_prefix }} \
+inference.input_pdb={{ target_pdb }} \
+'contigmap.contigs={{ contigs }}' \
+{% if hotspot_tokens %}'ppi.hotspot_res=[{{ hotspot_tokens | join(', ') }}]' \
+{% endif %}inference.num_designs={{ num_designs }} \
+denoiser.noise_scale_ca={{ noise_scale_ca }} \
+denoiser.noise_scale_frame={{ noise_scale_frame }}

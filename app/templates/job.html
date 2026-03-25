@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Job {{ job_id }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="5">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 24px;
+      line-height: 1.4;
+      background: #fafafa;
+    }
+    .panel {
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      padding: 16px;
+      background: #fff;
+      margin-bottom: 20px;
+    }
+    pre {
+      background: #f7f7f7;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 12px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    a {
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>Job {{ job_id }}</h1>
+
+  <div class="panel">
+    <p><strong>Job Directory:</strong> {{ job_dir }}</p>
+    <p>
+      <a href="/">Back to Home</a> |
+      <a href="/job/{{ job_id }}">Refresh Now</a>
+    </p>
+  </div>
+
+  <div class="panel">
+    <h2>Run Script</h2>
+    <pre>{{ run_script }}</pre>
+  </div>
+
+  <div class="panel">
+    <h2>Spec JSON</h2>
+    <pre>{{ spec_json }}</pre>
+  </div>
+
+  <div class="panel">
+    <h2>stdout.log</h2>
+    <pre>{{ stdout_text }}</pre>
+  </div>
+
+  <div class="panel">
+    <h2>stderr.log</h2>
+    <pre>{{ stderr_text }}</pre>
+  </div>
+</body>
+</html>

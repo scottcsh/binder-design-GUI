@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Binder design GUI</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+html{overflow-y:scroll;}
+body{
+  font-family:Arial,sans-serif;
+  margin:0;
+  background:#fafafa;
+  display:flex;
+  justify-content:center;
+}
+.page{
+  width:100%;
+  max-width:1000px;
+  margin:0 auto;
+  padding:0 10px;
+  box-sizing:border-box;
+}
+.top-banner{
+  width:100%;
+  margin-top:12px;
+}
+.top-banner img{
+  width:100%;
+  height:auto;
+  display:block;
+  border-radius:8px;
+}
+.navbar{
+  display:flex;
+  gap:8px;
+  margin-top:12px;
+}
+.nav-link{
+  display:inline-block;
+  padding:10px 14px;
+  border:1px solid #ddd;
+  border-bottom:none;
+  border-radius:10px 10px 0 0;
+  background:#f2f2f2;
+  color:#111;
+  text-decoration:none;
+  font-weight:600;
+}
+.nav-link.active{
+  background:#fff;
+}
+.panel{
+  border:1px solid #ddd;
+  border-radius:0 10px 10px 10px;
+  padding:16px;
+  background:#fff;
+}
+h1{
+  margin:0 0 16px 0;
+}
+label{
+  display:block;
+  font-weight:600;
+  margin-top:12px;
+  margin-bottom:6px;
+}
+input,select{
+  width:100%;
+  box-sizing:border-box;
+  padding:8px;
+  border:1px solid #bbb;
+  border-radius:6px;
+  font-size:14px;
+}
+button{
+  padding:10px 14px;
+  border:1px solid #999;
+  border-radius:8px;
+  background:#f5f5f5;
+  cursor:pointer;
+}
+.target-row,.output-row{
+  display:grid;
+  grid-template-columns:1fr 120px;
+  gap:8px;
+  align-items:center;
+}
+.mode-section{
+  display:grid;
+  grid-template-columns:170px 1fr;
+  gap:8px;
+  margin-top:12px;
+}
+.mode-left{
+  display:flex;
+  align-items:center;
+  font-weight:600;
+  padding-left:2ch;
+  width:170px;
+  box-sizing:border-box;
+}
+.mode-left input{
+  width:auto;
+  margin:0;
+}
+.mode-left span{
+  margin-left:2ch;
+}
+.mode-box{
+  border:1px solid #ddd;
+  border-radius:8px;
+  padding:12px;
+  background:#fafafa;
+}
+.disabled{
+  opacity:0.4;
+  pointer-events:none;
+}
+.contig-row{
+  display:grid;
+  grid-template-columns:110px 1fr 1fr 1fr;
+  gap:8px;
+  align-items:center;
+  margin-top:8px;
+}
+.block-label{
+  font-weight:600;
+}
+.field-label{
+  font-size:12px;
+  font-weight:600;
+  margin-bottom:4px;
+}
+.preview-box,.result-box,.status-box{
+  margin-top:14px;
+}
+.preview-canvas{
+  border:1px solid #ddd;
+  border-radius:8px;
+  background:#fafafa;
+  padding:12px;
+  margin-top:8px;
+}
+.preview-row{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.preview-block{
+  height:32px;
+  border-radius:8px;
+  border:1px solid #bbb;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:0 10px;
+  font-size:12px;
+  font-weight:600;
+  white-space:nowrap;
+}
+.preview-target{background:#e8f1ff;}
+.preview-break{background:#f0f0f0;min-width:40px;}
+.preview-design{background:#eef8ea;}
+.result-panel,.status-panel{
+  border:1px solid #ddd;
+  border-radius:8px;
+  background:#fafafa;
+  padding:12px;
+  margin-top:8px;
+}
+pre{
+  white-space:pre-wrap;
+  word-break:break-word;
+  margin:0;
+}
+.msg{
+  margin-top:12px;
+  padding:10px 12px;
+  border-radius:8px;
+  background:#eef8ea;
+  border:1px solid #cfe8c7;
+}
+.err{
+  margin-top:12px;
+  padding:10px 12px;
+  border-radius:8px;
+  background:#fdeaea;
+  border:1px solid #f2c8c8;
+}
+.help{
+  margin-top:6px;
+  color:#555;
+  font-size:13px;
+}
+.button-row{
+  display:flex;
+  gap:10px;
+  margin-top:16px;
+}
+.button-row button{
+  width:auto;
+}
+.meta-line{
+  font-size:13px;
+  color:#444;
+  margin-bottom:8px;
+}
+#run_log{
+  max-height:26em;
+  overflow:auto;
+}
+</style>
+<script>
+function openBrowser(targetId, selectType){
+  const url = "/browse?target_id=" + encodeURIComponent(targetId) + "&select=" + encodeURIComponent(selectType);
+  window.open(url, "serverFileBrowser", "width=1000,height=700");
+}
+
+function updateMode(){
+  const basic = document.getElementById("mode_basic").checked;
+  const partial = document.getElementById("mode_partial").checked;
+  const custom = document.getElementById("mode_custom").checked;
+
+  document.getElementById("basic_box").classList.toggle("disabled", !basic);
+  document.getElementById("partial_box").classList.toggle("disabled", !partial);
+  document.getElementById("custom_box").classList.toggle("disabled", !custom);
+  document.getElementById("partial_t_value").disabled = !partial;
+  document.getElementById("mode_hidden").value = basic ? "basic" : (partial ? "partial" : "custom");
+
+  updatePreview();
+}
+
+function parsePositiveInt(v){
+  const n = Number(v);
+  if(!Number.isFinite(n) || n <= 0) return null;
+  return n;
+}
+
+function buildContig(){
+  let contig = "";
+  let blocks = [];
+
+  if(document.getElementById("mode_basic").checked){
+    const chain = document.getElementById("target_chain").value.trim();
+    const start = parsePositiveInt(document.getElementById("target_start").value);
+    const end = parsePositiveInt(document.getElementById("target_end").value);
+    const min = document.getElementById("design_min").value.trim();
+    const max = document.getElementById("design_max").value.trim();
+
+    let parts = [];
+
+    if(chain && start && end){
+      const label = `${chain}${start}-${end}`;
+      parts.push(label + "/0");
+      blocks.push({type:"target",label:label});
+      blocks.push({type:"break",label:"/0"});
+    }
+
+    if(min && max){
+      const label = `${min}-${max}`;
+      parts.push(label);
+      blocks.push({type:"design",label:label});
+    }
+
+    if(parts.length) contig = "[" + parts.join(" ") + "]";
+  } else if(document.getElementById("mode_partial").checked){
+    const chain = document.getElementById("partial_target_chain").value.trim();
+    const start = parsePositiveInt(document.getElementById("partial_target_start").value);
+    const end = parsePositiveInt(document.getElementById("partial_target_end").value);
+    const length = parsePositiveInt(document.getElementById("partial_design_length").value);
+
+    let parts = [];
+
+    if(chain && start && end){
+      const targetLabel = `${chain}${start}-${end}`;
+      parts.push(targetLabel);
+      blocks.push({type:"target",label:targetLabel});
+    }
+
+    if(length){
+      const designLabel = `${length}-${length}`;
+      parts.push(designLabel + "/0");
+      blocks.push({type:"design",label:designLabel});
+      blocks.push({type:"break",label:"/0"});
+    }
+
+    if(parts.length) contig = "[" + parts.join(" ") + "]";
+  } else {
+    contig = document.getElementById("custom_contig").value.trim();
+    blocks = parseCustom(contig);
+  }
+
+  document.getElementById("preview").value = contig;
+  document.getElementById("contigs_hidden").value = contig;
+  render(blocks);
+  return contig;
+}
+
+function parseCustom(str){
+  const out = [];
+  if(!str) return out;
+
+  const core = str.replace(/\s+diffuser\.partial_T=[^\s]+$/, "");
+  if(core.startsWith("[") && core.endsWith("]")){
+    const tokens = core.slice(1,-1).trim().split(/\s+/).filter(Boolean);
+
+    for(const token of tokens){
+      if(token.includes("/0")){
+        const base = token.replace("/0","");
+        if(base) out.push({type:"design",label:base});
+        out.push({type:"break",label:"/0"});
+      } else if(token.includes("/")){
+        const parts = token.split("/");
+        for(const p of parts){
+          if(p) out.push({type:"design",label:p});
+        }
+      } else {
+        out.push({type:"design",label:token});
+      }
+    }
+  }
+  return out;
+}
+
+function render(blocks){
+  const root = document.getElementById("preview_visual");
+  root.innerHTML = "";
+  const row = document.createElement("div");
+  row.className = "preview-row";
+
+  if(blocks.length === 0){
+    const empty = document.createElement("div");
+    empty.textContent = "No contig.";
+    row.appendChild(empty);
+    root.appendChild(row);
+    return;
+  }
+
+  for(const b of blocks){
+    const el = document.createElement("div");
+    el.className = "preview-block";
+    if(b.type === "target") el.classList.add("preview-target");
+    else if(b.type === "break") el.classList.add("preview-break");
+    else el.classList.add("preview-design");
+    el.textContent = b.label;
+    row.appendChild(el);
+  }
+
+  root.appendChild(row);
+}
+
+function updatePreview(){
+  buildContig();
+}
+
+function submitAction(action){
+  if(action === "compile"){
+    const contig = buildContig();
+    if(contig.trim().length === 0){
+      alert("Contig is required.");
+      return false;
+    }
+  } else {
+    const runScriptPath = document.getElementById("run_script_path").value.trim();
+    if(!runScriptPath){
+      alert("Compile first to generate a run script.");
+      return false;
+    }
+  }
+  document.getElementById("submit_action").value = action;
+  document.getElementById("rfd_form").submit();
+  return true;
+}
+
+async function pollRunStatus(){
+  const logPath = document.getElementById("current_log_path")?.value || "";
+  const pid = document.getElementById("current_pid")?.value || "";
+  if(!logPath || !pid){
+    return;
+  }
+
+  try{
+    const totalDesigns = document.getElementById("total_designs")?.value || "0";
+    const params = new URLSearchParams({log_path: logPath, pid: pid, total_designs: totalDesigns});
+    const res = await fetch("/run-status?" + params.toString(), {cache: "no-store"});
+    if(!res.ok){
+      return;
+    }
+    const data = await res.json();
+
+    const stateEl = document.getElementById("run_state");
+    const countEl = document.getElementById("run_count");
+    const logEl = document.getElementById("run_log");
+    if(stateEl){
+      stateEl.textContent = data.is_running ? "Running" : "Finished";
+    }
+    if(countEl){
+      countEl.textContent = `(${data.completed_designs} / ${data.total_designs})`;
+    }
+    if(logEl){
+      logEl.textContent = data.log_tail || "";
+    }
+
+    if(data.is_running){
+      window.setTimeout(pollRunStatus, 2000);
+    }
+  }catch(_err){
+    window.setTimeout(pollRunStatus, 3000);
+  }
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  const mode = document.getElementById("mode_hidden").value || "basic";
+  if(mode === "basic") document.getElementById("mode_basic").checked = true;
+  else if(mode === "partial") document.getElementById("mode_partial").checked = true;
+  else document.getElementById("mode_custom").checked = true;
+
+  updateMode();
+
+  const logPath = document.getElementById("current_log_path")?.value || "";
+  const pid = document.getElementById("current_pid")?.value || "";
+  if(logPath && pid){
+    pollRunStatus();
+  }
+});
+</script>
+</head>
+<body>
+<div class="page">
+  <div class="top-banner">
+    <img src="/static/banner.png" alt="Banner">
+  </div>
+
+  <div class="navbar">
+    <a class="nav-link" href="/options">Options</a>
+    <a class="nav-link active" href="/">RFdiffusion</a>
+    <a class="nav-link" href="/evoef2">EvoEF2</a>
+    <a class="nav-link" href="/proteinmpnn">ProteinMPNN</a>
+    <a class="nav-link" href="/alphafold3">AlphaFold 3</a>
+    <a class="nav-link" href="/filter_af3_results">Filter AF3 Results</a>
+  </div>
+
+  <div class="panel">
+    <h1>RFdiffusion</h1>
+
+    {% if message %}<div class="msg">{{ message }}</div>{% endif %}
+    {% if error %}<div class="err">{{ error }}</div>{% endif %}
+
+    <form id="rfd_form" action="/compile" method="post">
+      <input type="hidden" id="submit_action" name="submit_action" value="compile">
+      <input type="hidden" id="mode_hidden" name="mode" value="{{ spec.mode }}">
+      <input type="hidden" id="run_script_path" name="run_script_path" value="{{ spec.run_script_path }}">
+      <input type="hidden" id="run_log_path" name="run_log_path" value="{{ spec.run_log_path }}">
+      <input type="hidden" id="contigs_hidden" name="contigs" value="{{ spec.contigs }}">
+
+      <label>Target PDB</label>
+      <div class="target-row">
+        <input id="target_pdb" name="target_pdb" value="{{ spec.target_pdb }}">
+        <button type="button" onclick="openBrowser('target_pdb','file')">Browse</button>
+      </div>
+
+      <div class="mode-section">
+        <div class="mode-left">
+          <input type="radio" id="mode_basic" name="mode_ui" onchange="updateMode()"><span>Basic</span>
+        </div>
+        <div id="basic_box" class="mode-box">
+          <div class="contig-row">
+            <div class="block-label">Target</div>
+            <div>
+              <div class="field-label">Chain</div>
+              <input id="target_chain" name="target_chain" value="{{ spec.target_chain }}" oninput="updatePreview()">
+            </div>
+            <div>
+              <div class="field-label">Start</div>
+              <input type="number" id="target_start" name="target_start" value="{{ spec.target_start }}" oninput="updatePreview()">
+            </div>
+            <div>
+              <div class="field-label">End</div>
+              <input type="number" id="target_end" name="target_end" value="{{ spec.target_end }}" oninput="updatePreview()">
+            </div>
+          </div>
+
+          <div class="contig-row">
+            <div class="block-label">Design</div>
+            <div>
+              <div class="field-label">Min</div>
+              <input type="number" id="design_min" name="design_min" value="{{ spec.design_min }}" oninput="updatePreview()">
+            </div>
+            <div>
+              <div class="field-label">Max</div>
+              <input type="number" id="design_max" name="design_max" value="{{ spec.design_max }}" oninput="updatePreview()">
+            </div>
+            <div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mode-section">
+        <div class="mode-left">
+          <input type="radio" id="mode_partial" name="mode_ui" onchange="updateMode()"><span>Partial</span>
+        </div>
+        <div id="partial_box" class="mode-box">
+          <div class="contig-row">
+            <div class="block-label">Target</div>
+            <div>
+              <div class="field-label">Chain</div>
+              <input id="partial_target_chain" name="partial_target_chain" value="{{ spec.partial_target_chain }}" oninput="updatePreview()">
+            </div>
+            <div>
+              <div class="field-label">Start</div>
+              <input type="number" id="partial_target_start" name="partial_target_start" value="{{ spec.partial_target_start }}" oninput="updatePreview()">
+            </div>
+            <div>
+              <div class="field-label">End</div>
+              <input type="number" id="partial_target_end" name="partial_target_end" value="{{ spec.partial_target_end }}" oninput="updatePreview()">
+            </div>
+          </div>
+
+          <div class="contig-row">
+            <div class="block-label">Design</div>
+            <div>
+              <div class="field-label">Length</div>
+              <input type="number" id="partial_design_length" name="partial_design_length" value="{{ spec.partial_design_length }}" oninput="updatePreview()">
+            </div>
+            <div>
+              <div class="field-label">T Value</div>
+              <input type="number" id="partial_t_value" name="partial_t_value" value="{{ spec.partial_t_value }}">
+            </div>
+            <div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mode-section">
+        <div class="mode-left">
+          <input type="radio" id="mode_custom" name="mode_ui" onchange="updateMode()"><span>Custom</span>
+        </div>
+        <div id="custom_box" class="mode-box">
+          <input id="custom_contig" name="custom_contig" value="{{ spec.custom_contig }}" oninput="updatePreview()" placeholder="[A1-180/0 60-80]">
+        </div>
+      </div>
+
+      <div class="preview-box">
+        <label>Preview</label>
+        <input id="preview" readonly>
+        <div id="preview_visual" class="preview-canvas"></div>
+      </div>
+
+      <label>Hotspot Chain</label>
+      <input name="hotspot_chain" value="{{ spec.hotspot_chain }}">
+
+      <label>Hotspot Residues</label>
+      <input name="hotspot_residues" value="{{ spec.hotspot_residues }}" placeholder="151, 158, 201">
+
+      <label>Number of Designs</label>
+      <input name="num_backbones" type="number" value="{{ spec.num_backbones }}">
+
+      <label>Noise Scale CA</label>
+      <input name="noise_scale_ca" type="number" step="0.1" value="{{ spec.noise_scale_ca }}">
+
+      <label>Noise Scale Frame</label>
+      <input name="noise_scale_frame" type="number" step="0.1" value="{{ spec.noise_scale_frame }}">
+
+      <label>Output Directory</label>
+      <div class="output-row">
+        <input id="output_dir" name="output_dir" value="{{ spec.output_dir }}">
+        <button type="button" onclick="openBrowser('output_dir','dir')">Browse</button>
+      </div>
+
+      <label>Output File Prefix</label>
+      <input id="output_prefix" name="output_prefix" value="{{ spec.output_prefix }}">
+
+      <label>GPU</label>
+      <select name="gpu_id">
+        <option value="0" {% if spec.gpu_id == "0" %}selected{% endif %}>0</option>
+        <option value="1" {% if spec.gpu_id == "1" %}selected{% endif %}>1</option>
+      </select>
+
+      <div class="help">RFdiffusion executable and environment are configured in Options.</div>
+
+      <div class="button-row">
+        <button type="button" onclick="submitAction('compile')">Compile</button>
+        <button type="button" onclick="submitAction('run')">Run RFdiffusion</button>
+      </div>
+    </form>
+
+    {% if compile_result %}
+    <div class="result-box">
+      <label>Compile Result</label>
+      <div class="result-panel"><pre>{{ compile_result }}</pre></div>
+    </div>
+    {% endif %}
+
+    {% if current_log_path and current_pid %}
+    <div class="status-box">
+      <label>Run Progress</label>
+      <input type="hidden" id="current_log_path" value="{{ current_log_path }}">
+      <input type="hidden" id="current_pid" value="{{ current_pid }}">
+      <input type="hidden" id="total_designs" value="{{ total_designs }}">
+      <div class="status-panel">
+        <div class="meta-line">PID: {{ current_pid }}</div>
+        <div class="meta-line">Log: {{ current_log_path }}</div>
+        <div class="meta-line">State: <span id="run_state">Starting</span> <span id="run_count">({{ completed_designs }} / {{ total_designs }})</span></div>
+        <pre id="run_log">{{ initial_log_tail }}</pre>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+</body>
+</html>

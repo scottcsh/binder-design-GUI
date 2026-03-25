@@ -1,0 +1,13 @@
+{
+  "rfd_executable": "/home/cs/RFdiffusion/scripts/run_inference.py",
+  "env_setup": "module load miniforge3/\r\nsource \"$(conda info --base)/etc/profile.d/conda.sh\"\r\nset +u\r\nconda deactivate\r\nconda activate SE3nv\r\nset -u",
+  "evoef2_executable": "/home/cs/EvoEF2/EvoEF2",
+  "proteinmpnn_dir": "/HL9/HApp/EMT/ProteinMPNN/v1.0.1",
+  "proteinmpnn_env_setup": "module load proteinmpnn/v1.0.1\r\nset +u\r\nconda deactivate\r\nconda activate mlfold\r\nset -u",
+  "alphafold3_root_dir": "/HL9/HApp/EMT/alphafold3/v3.0.1-1/alphafold3",
+  "alphafold3_database_dir": "/data/AF3_database",
+  "alphafold3_model_dir": "/HL9/HApp/EMT/alphafold3",
+  "alphafold3_docker_profile": "alphafold3-1:latest",
+  "alphafold3_environment": "module load alphafold3/v3.0.1\r\nset +u\r\nconda deactivate\r\nconda activate af3\r\nset -u",
+  "proteinmpnn_executable": "/HL9/HApp/EMT/ProteinMPNN/v1.0.1/"
+}
