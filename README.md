@@ -4,7 +4,7 @@
 
 ## Table of Contents
 - [Installation](#Installation)
-- [System Requirements](#SystemRequirements)
+- [System Requirements](#System-Requirements)
 - [First-run Configuration](#First-run-Configuration)
 - [Running the App](#Running-the-App)
 - [Acknowledgements](#Acknowledgements)
