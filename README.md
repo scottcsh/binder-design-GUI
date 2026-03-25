@@ -1,3 +1,14 @@
+<p align="center">
+<img src=".app/static/banner.png" alt="banner" width="75%"/>
+</p>
+
+## Table of Contents
+- [Installation](#Installation)
+- [System Requirements](#System Requirements)
+- [First-run Configuration](#First-run Configuration)
+- [Running the App](#Running the App)
+- [Acknowledgements](#Acknowledgements)
+
 # Binder Design GUI
 
 A lightweight web UI for running and chaining several structure-design workflows:
@@ -12,109 +23,26 @@ The interface is designed for local or server-side use and focuses on practical 
 
 ---
 
-## Features
+## Installation
 
-### RFdiffusion
-- Configure RFdiffusion executable and environment
-- Set target / contig / hotspot options in the UI
-- Generate and run inference scripts
-- Track progress from the web page
-
-### EvoEF2
-- Run `ProteinDesign` and `ComputeBinding` for a directory of PDB files
-- Rank structures by EvoEF2 binding score
-- Keep top `N` structures with **Max PDBs to keep**
-- Automatically copy selected best structures into:
-
-```text
-<input_directory>/evoef2_beststructures/
+```bash
+git clone https://github.com/scottcsh/binder-design-GUI
 ```
-
-### ProteinMPNN
-- Parse PDB directories and assign design chains
-- Configure common ProteinMPNN options:
-  - output directory
-  - chain to design
-  - number of sequences per target
-  - sampling temperature
-  - seed
-  - batch size
-- Optional features:
-  - omit amino acids
-  - amino-acid bias
-  - fixed positions
-  - generate AlphaFold 3 JSON inputs
-- Convert target PDB to FASTA from the UI
-- Real-time run progress monitoring
-
-### AlphaFold 3
-- Configure AlphaFold 3 environment from the Options page
-- Set:
-  - input JSON directory
-  - output directory
-  - GPU
-- Compile run scripts from the UI
-- Run AlphaFold 3 jobs from the UI
-- Monitor progress in real time
-- Stop jobs by killing the exact Docker container created for that run
-
-### Filter AF3 Results
-- Run `scripts/AF3_filter.sh` from the UI
-- Filter based on:
-  - `iptm`
-  - `ptm`
-  - ranking score
-  - `PAE`
-  - chain ID
-  - maximum number of outputs
-- Move generated `results.csv` into the selected filtered-result directory
-- Copy matching CIF files from the AlphaFold 3 output tree into the filtered-result directory
-
----
-
-## Repository Structure
-
-```text
-app/
-  templates/
-  static/
-  web.py
-
-scripts/
-  AF3_filter.sh
-  pdb2fasta2.sh
-  mpnn2afserver.sh
-  ...
-
-data/
-  app_config.json
-```
-
----
 
 ## System Requirements
 
 This project depends on several **external tools** that are **not Python packages**.
 
-### Required / commonly used tools
-- Python 3.10+
-- FastAPI
-- Uvicorn
-- RFdiffusion
-- EvoEF2
-- ProteinMPNN
-- Docker
-- AlphaFold 3 runtime/image
+- RFdiffusion (https://github.com/RosettaCommons/RFdiffusion)
+- EvoEF2 (https://github.com/tommyhuangthu/EvoEF2)
+- ProteinMPNN (https://github.com/dauparas/ProteinMPNN)
+- AlphaFold 3 runtime/image (https://github.com/google-deepmind/alphafold3)
+  
 - `jq` for scripts that require JSON processing
 
-### Example Ubuntu packages
-
 ```bash
-sudo apt-get update
-sudo apt-get install -y jq docker.io
+yum install jq -y
 ```
-
-### Python packages
 
 Create a virtual environment and install your Python dependencies:
 
@@ -128,7 +56,7 @@ Add any additional project-specific Python requirements as needed.
 
 ---
 
-## Configuration
+## First-run Configuration
 
 Open the **Options** page and configure the paths used by the GUI.
 
@@ -156,8 +84,6 @@ These values are stored in:
 data/app_config.json
 ```
 
-Do **not** commit personal or machine-specific paths if you are publishing this repository.
-
 ---
 
 ## Running the App
@@ -165,118 +91,17 @@ Do **not** commit personal or machine-specific paths if you are publishing this 
 From the project root:
 
 ```bash
-uvicorn app.web:app --host 0.0.0.0 --port 8000
+./scripts/start_server.sh
 ```
 
-Then open:
+Then open in local web browser:
 
 ```text
-http://localhost:8000
+http://127.0.0.1:65022
 ```
-
----
-
-## Important Runtime Notes
-
-### 1. jq is a system dependency
-`jq` must be installed at the OS level.  
-It cannot be added through `requirements.txt`.
-
-### 2. Large databases should not be committed
-Do not commit AlphaFold databases, model weights, generated JSON files, CIF files, or run outputs.
-
-### 3. Docker is required for AlphaFold 3
-The AF3 page assumes that Docker is available and usable by the current user.
-
-### 4. Environment blocks are shell snippets
-The environment fields in Options are inserted into generated shell scripts.  
-Use valid shell commands only.
-
----
-
-## Recommended `.gitignore`
-
-Create a `.gitignore` like this:
-
-```gitignore
-# Python
-__pycache__/
-*.pyc
-*.pyo
-
-# Virtual environments
-.venv/
-
-# Logs
-*.log
-*.out
-*.err
-
-# Generated outputs
-outputs/
-seqs/
-AF3_jsons/
-evoef2_beststructures/
-results.csv
-
-# AF3 / structure outputs
-*.cif
-*.json
-
-# Large resources
-public_databases/
-models/
-
-# Local config / secrets
-.env
-data/app_config.json
-
-# OS files
-.DS_Store
-```
-
-If you want to keep a tracked example config, use something like:
-
+or in remote browser with IP x.x.x.x
 ```text
-data/app_config.example.json
-```
-
-instead of committing the real local config.
-
----
-
-## Suggested Publishing Checklist
-
-Before pushing to GitHub, check the following:
-
-- Remove all machine-specific absolute paths
-- Remove personal server paths such as `/home/...`
-- Do not commit databases or model weights
-- Do not commit generated run outputs
-- Do not commit local logs
-- Keep scripts and templates only
-- Provide setup instructions for external dependencies
-
----
-
-## Known Assumptions
-
-This GUI assumes a workflow where:
-- RFdiffusion, EvoEF2, ProteinMPNN, and AF3 are already installed or accessible
-- the user has permission to execute Docker commands
-- shell scripts in `scripts/` are available and executable
-- output folders are writable
-
----
-
-## License
-
-Add your preferred license here before publishing.
-
-Example:
-
-```text
-MIT License
+http://x.x.x.x:65022
 ```
 
 ---
@@ -290,3 +115,8 @@ This GUI is a thin interface layer around external tools including:
 - AlphaFold 3
 
 Please follow the licenses and usage requirements of each upstream project.
+
+</br>
+</br>
+
+[Return to top](#Table-of-Contents)
