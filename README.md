@@ -1,12 +1,12 @@
 <p align="center">
-<img src="./app/static/banner.png" alt="banner" width="75%"/>
+<img src="./app/static/banner.png" alt="banner" width="100%"/>
 </p>
 
 ## Table of Contents
 - [Installation](#Installation)
 - [System Requirements](#SystemRequirements)
-- [First-run Configuration](#First-runConfiguration)
-- [Running the App](#RunningtheApp)
+- [First-run Configuration](#First-run-Configuration)
+- [Running the App](#Running-the-App)
 - [Acknowledgements](#Acknowledgements)
 
 # Binder Design GUI
