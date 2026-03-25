@@ -1,5 +1,5 @@
 <p align="center">
-<img src="./app/static/banner.png" alt="banner" width="100%"/>
+<img src="./app/static/GUI.png" alt="banner" width="100%"/>
 </p>
 
 # Binder Design GUI
