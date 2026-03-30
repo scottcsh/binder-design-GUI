@@ -83,6 +83,8 @@ def default_proteinmpnn_spec() -> dict:
         "run_log_path": "",
         "run_pid": "",
         "generate_af3_json_input": False,
+        "add_c_term_trp": False,
+        "c_term_trp_count": "1",
         "omit_aas_list": "",
         "make_bias_aa_list": "",
         "make_bias_bias_list": "",
@@ -321,6 +323,14 @@ def build_proteinmpnn_script(spec: dict, config: dict) -> str:
         spec.get("generate_af3_json_input")
         and str(spec.get("target_pdb", "")).strip()
     )
+    use_c_term_trp = bool(spec.get("add_c_term_trp"))
+    c_term_trp_count = str(spec.get("c_term_trp_count", "1")).strip() or "1"
+    try:
+        c_term_trp_count_value = int(c_term_trp_count)
+    except ValueError as exc:
+        raise ValueError("C-term Trp count must be an integer.") from exc
+    if c_term_trp_count_value < 0:
+        raise ValueError("C-term Trp count must be 0 or greater.")
 
     lines = [
         "#!/bin/bash",
@@ -360,6 +370,11 @@ def build_proteinmpnn_script(spec: dict, config: dict) -> str:
             'af3_output_dir=$output_dir"/AF3_jsons"',
             f'target_fasta={shlex.quote(str(fasta_path))}',
             f'af3_script={shlex.quote(str(af3_script))}',
+        ])
+
+    if use_c_term_trp:
+        lines.extend([
+            f'c_term_trp_count={shlex.quote(str(c_term_trp_count_value))}',
         ])
 
     lines.append("")
@@ -416,6 +431,43 @@ def build_proteinmpnn_script(spec: dict, config: dict) -> str:
 
     lines.append('echo "[3/3] Running ProteinMPNN"')
     lines.append(cmd)
+
+    if use_c_term_trp:
+        lines.append('echo "[Post] Appending C-term Trp to generated sequences"')
+        lines.append("python - <<'PY'")
+        lines.extend([
+            'from pathlib import Path',
+            '',
+            'seq_dir = Path(r"' + str(output_dir / 'seqs') + '")',
+            'suffix = "W" * int(r"' + str(c_term_trp_count_value) + '")',
+            '',
+            'if suffix:',
+            '    for fasta_path in sorted(seq_dir.glob("*.fa")):',
+            '        lines = fasta_path.read_text(encoding="utf-8").splitlines()',
+            '        records = []',
+            '        header = None',
+            '        seq_lines = []',
+            '        for line in lines:',
+            '            if line.startswith(">"):',
+            '                if header is not None:',
+            '                    records.append((header, "".join(seq_lines)))',
+            '                header = line',
+            '                seq_lines = []',
+            '            else:',
+            '                seq_lines.append(line.strip())',
+            '        if header is not None:',
+            '            records.append((header, "".join(seq_lines)))',
+            '        if not records:',
+            '            continue',
+            '        updated_lines = []',
+            '        for idx, (header, sequence) in enumerate(records):',
+            '            if idx >= 1:',
+            '                sequence = sequence + suffix',
+            '            updated_lines.append(header)',
+            '            updated_lines.append(sequence)',
+            '        fasta_path.write_text("\\n".join(updated_lines) + "\\n", encoding="utf-8")',
+        ])
+        lines.append('PY')
 
     if use_af3:
         lines.append('echo "[AF3] Generating AlphaFold3 JSON input"')
@@ -874,6 +926,7 @@ def proteinmpnn_compile(
     fixed_position_list: str = Form(""),
     target_pdb: str = Form(""),
     target_protein_chain: str = Form(""),
+    c_term_trp_count: str = Form("1"),
     options: list[str] = Form(default=[]),
 ):
     spec = default_proteinmpnn_spec()
@@ -891,7 +944,9 @@ def proteinmpnn_compile(
     spec["fixed_position_list"] = fixed_position_list.strip()
     spec["target_pdb"] = target_pdb.strip()
     spec["target_protein_chain"] = target_protein_chain.strip()
+    spec["c_term_trp_count"] = c_term_trp_count.strip() or "1"
     spec["generate_af3_json_input"] = "generate_af3_json_input" in options
+    spec["add_c_term_trp"] = "add_c_term_trp" in options
     spec["omit_aas"] = "omit_aas" in options
     spec["make_bias"] = "make_bias" in options
     spec["fixed_position"] = "fixed_position" in options
@@ -923,6 +978,7 @@ def proteinmpnn_run(
     fixed_position_list: str = Form(""),
     target_pdb: str = Form(""),
     target_protein_chain: str = Form(""),
+    c_term_trp_count: str = Form("1"),
     run_script_path: str = Form(...),
     options: list[str] = Form(default=[]),
 ):
@@ -941,8 +997,10 @@ def proteinmpnn_run(
     spec["fixed_position_list"] = fixed_position_list.strip()
     spec["target_pdb"] = target_pdb.strip()
     spec["target_protein_chain"] = target_protein_chain.strip()
+    spec["c_term_trp_count"] = c_term_trp_count.strip() or "1"
     spec["run_script_path"] = run_script_path.strip()
     spec["generate_af3_json_input"] = "generate_af3_json_input" in options
+    spec["add_c_term_trp"] = "add_c_term_trp" in options
     spec["omit_aas"] = "omit_aas" in options
     spec["make_bias"] = "make_bias" in options
     spec["fixed_position"] = "fixed_position" in options
