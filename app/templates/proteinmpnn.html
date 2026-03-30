@@ -199,6 +199,10 @@ function updateAf3TargetPdbInput(){
   }
 }
 
+function updateAddCTermTrpInput(){
+  updateOptionBlock("add_c_term_trp", "add_c_term_trp_block", ["c_term_trp_count"]);
+}
+
 async function updatePdbCount(){
   const inputDir = document.getElementById("input_dir").value.trim();
   const countEl = document.getElementById("pdb_count");
@@ -237,6 +241,7 @@ function getFormData(){
   formData.append("fixed_position_list", document.getElementById("fixed_position_list").value.trim());
   formData.append("target_pdb", document.getElementById("target_pdb").value.trim());
   formData.append("target_protein_chain", document.getElementById("target_protein_chain").value.trim());
+  formData.append("c_term_trp_count", document.getElementById("c_term_trp_count").value.trim());
   formData.append("run_script_path", document.getElementById("run_script_path").value.trim());
   document.querySelectorAll('input[name="options"]:checked').forEach((el) => {
     formData.append("options", el.value);
@@ -360,6 +365,7 @@ window.addEventListener("DOMContentLoaded", function(){
   updateMakeBiasInputs();
   updateFixedPositionInput();
   updateAf3TargetPdbInput();
+  updateAddCTermTrpInput();
 });
 </script>
 </head>
@@ -455,6 +461,17 @@ window.addEventListener("DOMContentLoaded", function(){
 
       <div class="checkbox-group">
         <strong>Post-processing</strong>
+        <div class="option-block">
+          <label class="checkbox-item">
+            <input type="checkbox" name="options" value="add_c_term_trp" {% if proteinmpnn.add_c_term_trp %}checked{% endif %} onchange="updateAddCTermTrpInput()">
+            <span>Add C-term Trp</span>
+          </label>
+          <div id="add_c_term_trp_block" class="option-fields" style="{% if not proteinmpnn.add_c_term_trp %}display:none;{% endif %}">
+            <input id="c_term_trp_count" name="c_term_trp_count" value="{{ proteinmpnn.c_term_trp_count or '1' }}" placeholder="1" {% if not proteinmpnn.add_c_term_trp %}disabled{% endif %}>
+            <div class="help">Append this many W residues to each generated sequence after the first sequence in every ProteinMPNN FASTA file.</div>
+          </div>
+        </div>
+
         <div class="option-block">
           <label class="checkbox-item">
             <input type="checkbox" name="options" value="generate_af3_json_input" {% if proteinmpnn.generate_af3_json_input %}checked{% endif %} onchange="updateAf3TargetPdbInput()">
