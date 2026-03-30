@@ -203,6 +203,56 @@ function updateAddCTermTrpInput(){
   updateOptionBlock("add_c_term_trp", "add_c_term_trp_block", ["c_term_trp_count"]);
 }
 
+
+async function convertTargetPdbToFasta(){
+  const statusEl = document.getElementById("af3_convert_status");
+  const errorEl = document.getElementById("live_error");
+  const targetPdbEl = document.getElementById("target_pdb");
+  const targetChainEl = document.getElementById("target_protein_chain");
+
+  if(!statusEl || !targetPdbEl || !targetChainEl){
+    return;
+  }
+
+  errorEl.textContent = "";
+  statusEl.textContent = "Converting...";
+
+  const targetPdb = targetPdbEl.value.trim();
+  const targetProteinChain = targetChainEl.value.trim();
+
+  if(!targetPdb){
+    statusEl.textContent = "";
+    errorEl.textContent = "Target PDB is required.";
+    return;
+  }
+
+  if(!targetProteinChain){
+    statusEl.textContent = "";
+    errorEl.textContent = "Target protein chain is required.";
+    return;
+  }
+
+  try{
+    const formData = new FormData();
+    formData.append("target_pdb", targetPdb);
+    formData.append("target_protein_chain", targetProteinChain);
+
+    const res = await fetch("/proteinmpnn/convert_pdb_to_fasta", {method:"POST", body:formData});
+    const data = await res.json();
+
+    if(!res.ok || !data.ok){
+      statusEl.textContent = "";
+      errorEl.textContent = data.error || "Failed to convert pdb to fasta.";
+      return;
+    }
+
+    statusEl.textContent = data.message || `FASTA created: ${data.fasta_path}`;
+  }catch(_err){
+    statusEl.textContent = "";
+    errorEl.textContent = "Failed to convert pdb to fasta.";
+  }
+}
+
 async function updatePdbCount(){
   const inputDir = document.getElementById("input_dir").value.trim();
   const countEl = document.getElementById("pdb_count");
