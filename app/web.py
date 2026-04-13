@@ -7,7 +7,9 @@ import subprocess
 import shlex
 import time
 import shutil
+import os
 from typing import Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from fastapi import FastAPI, Form, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -731,6 +733,7 @@ def evoef2_submit(
 
 
 
+
 @app.post("/evoef2/run", response_class=JSONResponse)
 def evoef2_run(
     input_dir: str = Form(...),
@@ -769,7 +772,7 @@ def evoef2_run(
         log_path = run_dir / f"{run_id}.log"
 
         PROTEINMPNN_RUNS[run_id] = {
-        "pdb_count": spec.get("pdb_count", 0),
+            "pdb_count": spec.get("pdb_count", 0),
             "type": "evoef2",
             "status": "running",
             "processed_count": 0,
@@ -782,36 +785,49 @@ def evoef2_run(
         }
         log_path.write_text(f"Queued {len(pdbs)} pdb files from {run_dir}\n", encoding="utf-8")
 
+        log_lock = threading.Lock()
+        state_lock = threading.Lock()
+
         def append_log(message: str):
-            with log_path.open("a", encoding="utf-8") as fh:
-                fh.write(message + "\n")
+            with log_lock:
+                with log_path.open("a", encoding="utf-8") as fh:
+                    fh.write(message + "\n")
 
         def worker():
             results = []
             try:
                 evoef2_executable = load_config().get("evoef2_executable", "EvoEF2") or "EvoEF2"
-                for i, pdb_path in enumerate(pdbs, start=1):
-                    append_log(f"[{i}/{len(pdbs)}] ProteinDesign: {pdb_path.name}")
-                    with log_path.open("a", encoding="utf-8") as lf:
-                        subprocess.run(
-                            [
-                                evoef2_executable,
-                                "--command=ProteinDesign",
-                                f"--design_chains={design_chain}",
-                                f"--pdb={str(pdb_path)}",
-                            ],
-                            cwd=str(run_dir),
-                            check=True,
-                            stdout=lf,
-                            stderr=subprocess.STDOUT,
-                            text=True,
-                        )
+                max_workers = 12
+                env = dict(os.environ)
+                env["OMP_NUM_THREADS"] = "1"
+                total_pdbs = len(pdbs)
+
+                def run_one_pdb(pdb_path: Path) -> dict:
+                    append_log(f"[queued/{total_pdbs}] ProteinDesign: {pdb_path.name}")
+                    design = subprocess.run(
+                        [
+                            evoef2_executable,
+                            "--command=ProteinDesign",
+                            f"--design_chains={design_chain}",
+                            f"--pdb={str(pdb_path)}",
+                        ],
+                        cwd=str(run_dir),
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                        env=env,
+                    )
+
+                    if design.stdout:
+                        append_log(design.stdout.rstrip())
+                    if design.stderr:
+                        append_log(design.stderr.rstrip())
 
                     beststruct_path = pdb_path.with_name(f"{pdb_path.stem}_beststruct.pdb")
                     if not beststruct_path.exists():
                         raise FileNotFoundError(f"Expected output not found: {beststruct_path}")
 
-                    append_log(f"[{i}/{len(pdbs)}] ComputeBinding: {beststruct_path.name}")
+                    append_log(f"[queued/{total_pdbs}] ComputeBinding: {beststruct_path.name}")
                     binding = subprocess.run(
                         [
                             evoef2_executable,
@@ -822,20 +838,31 @@ def evoef2_run(
                         check=True,
                         capture_output=True,
                         text=True,
+                        env=env,
                     )
 
+                    if binding.stdout:
+                        append_log(binding.stdout.rstrip())
+                    if binding.stderr:
+                        append_log(binding.stderr.rstrip())
+
                     score = parse_evoef2_total_score(binding.stdout)
-                    results.append(
-                        {
-                            "input_pdb": str(pdb_path),
-                            "beststruct_pdb": str(beststruct_path),
-                            "score": score,
-                        }
-                    )
-                    PROTEINMPNN_RUNS[run_id]["processed_count"] = i
-                    if score is not None:
-                        PROTEINMPNN_RUNS[run_id]["scored_count"] += 1
-                    append_log(f"[{i}/{len(pdbs)}] Done: {beststruct_path.name} | score={score}")
+                    return {
+                        "input_pdb": str(pdb_path),
+                        "beststruct_pdb": str(beststruct_path),
+                        "score": score,
+                    }
+
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    future_to_pdb = {executor.submit(run_one_pdb, pdb_path): pdb_path for pdb_path in pdbs}
+                    for i, future in enumerate(as_completed(future_to_pdb), start=1):
+                        item = future.result()
+                        results.append(item)
+                        with state_lock:
+                            PROTEINMPNN_RUNS[run_id]["processed_count"] = i
+                            if item["score"] is not None:
+                                PROTEINMPNN_RUNS[run_id]["scored_count"] += 1
+                        append_log(f"[{i}/{total_pdbs}] Done: {Path(item['beststruct_pdb']).name} | score={item['score']}")
 
                 scored_results = [r for r in results if r["score"] is not None]
                 scored_results.sort(key=lambda x: x["score"])
@@ -849,14 +876,16 @@ def evoef2_run(
                     if src_best.exists() and src_best.is_file():
                         shutil.copy2(str(src_best), str(best_dir / src_best.name))
 
-                PROTEINMPNN_RUNS[run_id]["results"] = kept_results
-                PROTEINMPNN_RUNS[run_id]["kept_count"] = len(kept_results)
-                PROTEINMPNN_RUNS[run_id]["status"] = "completed"
+                with state_lock:
+                    PROTEINMPNN_RUNS[run_id]["results"] = kept_results
+                    PROTEINMPNN_RUNS[run_id]["kept_count"] = len(kept_results)
+                    PROTEINMPNN_RUNS[run_id]["status"] = "completed"
                 append_log(f"Copied {len(kept_results)} selected best structures to {best_dir}")
                 append_log("EvoEF2 run completed.")
             except Exception as exc:
-                PROTEINMPNN_RUNS[run_id]["status"] = "failed"
-                PROTEINMPNN_RUNS[run_id]["error"] = str(exc)
+                with state_lock:
+                    PROTEINMPNN_RUNS[run_id]["status"] = "failed"
+                    PROTEINMPNN_RUNS[run_id]["error"] = str(exc)
                 append_log(f"ERROR: {exc}")
 
         threading.Thread(target=worker, daemon=True).start()
